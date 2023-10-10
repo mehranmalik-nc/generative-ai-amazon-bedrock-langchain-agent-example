@@ -103,7 +103,7 @@ def elicit_intent(intent_request, session_attributes, message):
         },
         'messages': [
             {
-                'contentType': 'PlainText', 
+                'contentType': 'PlainText',
                 'content': message
             },
             {
@@ -125,7 +125,7 @@ def elicit_intent(intent_request, session_attributes, message):
                     ],
                     "title": "How can I help you?"
                 }
-            }     
+            }
         ]
     }
 
@@ -157,19 +157,19 @@ def delegate(session_attributes, active_contexts, intent, message):
 
 def initial_message(intent_name):
     response = {
-            'sessionState': {
-                'dialogAction': {
-                    'type': 'ElicitSlot',
-                    'slotToElicit': 'UserName' if intent_name=='MakePayment' else 'PickUpCity'
-                },
-                'intent': {
-                    'confirmationState': 'None',
-                    'name': intent_name,
-                    'state': 'InProgress'
-                }
+        'sessionState': {
+            'dialogAction': {
+                'type': 'ElicitSlot',
+                'slotToElicit': 'UserName' if intent_name=='MakePayment' else 'PickUpCity'
+            },
+            'intent': {
+                'confirmationState': 'None',
+                'name': intent_name,
+                'state': 'InProgress'
             }
+        }
     }
-    
+
     return response
 
 
@@ -195,11 +195,11 @@ def build_response_card(title, subtitle, options):
 
 def build_slot(intent_request, slot_to_build, slot_value):
     intent_request['sessionState']['intent']['slots'][slot_to_build] = {
-        'shape': 'Scalar', 'value': 
-        {
-            'originalValue': slot_value, 'resolvedValues': [slot_value], 
-            'interpretedValue': slot_value
-        }
+        'shape': 'Scalar', 'value':
+            {
+                'originalValue': slot_value, 'resolvedValues': [slot_value],
+                'interpretedValue': slot_value
+            }
     }
 
 
@@ -210,7 +210,7 @@ def build_validation_result(isvalid, violated_slot, message_content):
         'violatedSlot': violated_slot,
         'message': message_content
     }
-    
+
 
 # --- Utility helper functions ---
 
@@ -439,11 +439,11 @@ def verify_identity(intent_request):
                         message = "I see you have a Savings account with Octank Financial. Your account balance is ${:,} and your next payment \
                             amount of ${:,} is scheduled for {}.".format(item['unpaidPrincipal'], item['paymentAmount'], item['dueDate'])
                     elif item['planName'] == 'Loan' or item['planName'] == 'loan':
-                            message = "I see you have a Loan account with Octank Financial. Your account balance is ${:,} and your next payment \
+                        message = "I see you have a Loan account with Octank Financial. Your account balance is ${:,} and your next payment \
                             amount of ${:,} is scheduled for {}.".format(item['unpaidPrincipal'], item['paymentAmount'], item['dueDate'])
-                return elicit_intent(intent_request, session_attributes, 
-                    'Thank you for confirming your username and PIN, {}. {}'.format(username, message)
-                    )
+                return elicit_intent(intent_request, session_attributes,
+                                     'Thank you for confirming your username and PIN, {}. {}'.format(username, message)
+                                     )
 
             except Exception as e:
                 print(e)
@@ -630,7 +630,7 @@ def validate_loan_application(intent_request, slots):
             message = invoke_fm(intent_request)
             reply = message + " When are you looking to close?"
 
-            return build_validation_result(False, 'ClosingDate', reply)        
+            return build_validation_result(False, 'ClosingDate', reply)
     else:
         return build_validation_result(
             False,
@@ -665,7 +665,7 @@ def loan_application(intent_request):
     session_attributes = intent_request['sessionState'].get("sessionAttributes") or {}
     intent = intent_request['sessionState']['intent']
     active_contexts = {}
-    
+
     if intent_request['invocationSource'] == 'DialogCodeHook':
         # Validate any slots which have been specified.  If any are invalid, re-elicit for their value
         validation_result = validate_loan_application(intent_request, intent_request['sessionState']['intent']['slots'])
@@ -681,7 +681,7 @@ def loan_application(intent_request):
                 intent,
                 validation_result['violatedSlot'],
                 validation_result['message']
-            )  
+            )
 
     if username and monthly_income:
         application = {
@@ -742,7 +742,7 @@ def loan_application(intent_request):
 
             with open('/tmp/Mortgage-Loan-Application.pdf', "wb") as output_stream:
                 writer.write(output_stream)
-                
+
             s3_client.upload_file('/tmp/Mortgage-Loan-Application.pdf', 'omni-lex-artifacts', 'Mortgage-Loan-Application-Completed.pdf')
 
             # Create loan application doc in S3
@@ -750,7 +750,7 @@ def loan_application(intent_request):
 
         # create_presigned_url(bucket_name, object_name, expiration=600):
         URLs.append(create_presigned_url('omni-lex-artifacts','Mortgage-Loan-Application-Completed.pdf',3600))
-        
+
         mortgage_app = 'Your loan application is nearly complete! Please follow the link for the last few bits of information: ' + URLs[0]
 
         return elicit_intent(
@@ -779,11 +779,25 @@ def invoke_fm(intent_request):
     """
     Invokes Foundational Model endpoint hosted on Amazon Bedrock and parses the response.
     """
-    prompt = intent_request['inputTranscript']
+
+    prompt = "\n\nHuman:" + intent_request['inputTranscript'] + "\n\nAssistant:"
+    logging.info(prompt)
+
     chat = Chat(prompt)
+
+    dev = boto3.Session()
+    bedrock_runtime = dev.client(
+        service_name="bedrock",
+        region_name="us-east-1",
+        endpoint_url="https://bedrock-runtime.us-east-1.amazonaws.com",
+    )
+
+
     llm = Bedrock(
-        model_id="anthropic.claude-instant-v1"
-    )  
+        model_id="anthropic.claude-instant-v1",
+        client=bedrock_runtime,
+    )
+
     llm.model_kwargs = {'max_tokens_to_sample': 200}
     lex_agent = FSIAgent(llm, chat.memory)
 
@@ -807,7 +821,7 @@ def genai_intent(intent_request):
     Sends user utterance to Foundational Model endpoint via 'invoke_fm' function.
     """
     session_attributes = intent_request['sessionState'].get("sessionAttributes") or {}
-    
+
     if intent_request['invocationSource'] == 'DialogCodeHook':
         output = invoke_fm(intent_request)
         return elicit_intent(intent_request, session_attributes, output)
@@ -834,7 +848,7 @@ def dispatch(intent_request):
         return genai_intent(intent_request)
 
     raise Exception('Intent with name ' + intent_name + ' not supported')
-        
+
 
 # --- Main handler ---
 
